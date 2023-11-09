@@ -1,3 +1,4 @@
+
 let viewer = new Cesium.Viewer('cesiumContainer', {
     selectionIndicator: true,
     baseLayerPicker: true,
@@ -7,9 +8,32 @@ let viewer = new Cesium.Viewer('cesiumContainer', {
     sceneModePicker: true,
     timeline: false,
     animation: false,
-    infoBox: true
+    infoBox: true,
+    baseLayer: new Cesium.ImageryLayer(
+        new Cesium.TileMapServiceImageryProvider({
+            url: Cesium.buildModuleUrl("../Cesium/Assets/Textures/NaturalEarthII") + '/{z}/{x}/{reverseY}.jpg',
+            tilingScheme: new Cesium.GeographicTilingScheme(),
+            maximumLevel: 3
+        }))
 });
+//Tab Switching logic starts from here
+// Function to open a specific tab
+function openTab(evt, tabName) {
+    var i, tabcontent, tablinks;
+    tabcontent = document.getElementsByClassName("tabcontent");
+    for (i = 0; i < tabcontent.length; i++) {
+        tabcontent[i].style.display = "none";
+    }
+    tablinks = document.getElementsByClassName("tablinks");
+    for (i = 0; i < tablinks.length; i++) {
+        tablinks[i].className = tablinks[i].className.replace(" active", "");
+    }
+    document.getElementById(tabName).style.display = "flex";
+    evt.currentTarget.className += " active";
+}
+document.getElementsByClassName("tablinks")[0].click();
 
+//Tab Switching logic ends here 
 var handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
 var selectionRectangle = document.getElementById('selectionRectangle');
 let PincodeLayer;
@@ -21,7 +45,6 @@ var isDragging = false;
 var startPosition;
 var endPosition;
 var enableDraw = false;
-
 addImageryLayer = (url, layers, cqlQuery) => {
     console.log(cqlQuery)
     return viewer.imageryLayers.addImageryProvider(
@@ -36,7 +59,6 @@ addImageryLayer = (url, layers, cqlQuery) => {
         })
     );
 }
-
 addWfsVectorLayer = (wfsUrl, typeName, maxFeatures, username, password) => {
     const dataUrl = `${wfsUrl}?service=WFS&version=1.0.0&request=GetFeature&typeName=${typeName}&
                        maxFeatures=${maxFeatures}&outputFormat=application%2Fjson`;
@@ -62,15 +84,16 @@ addWfsVectorLayer = (wfsUrl, typeName, maxFeatures, username, password) => {
 }
 addImageLayerOnMap = () => {
     viewer.dataSources.removeAll();
-    PincodeLayer = addImageryLayer("https://mlinfomap.net/geoserver/AKB/wms", "AKB:PINCODE", "1=1");
+    if (!PincodeLayer)
+        PincodeLayer = addImageryLayer("http://localhost:8080/geoserver/AKB/wms", "PINCODE_CITY_NAME", "1=1");
 }
 addVectorLayer = () => {
     viewer.imageryLayers.remove(PincodeLayer);
-    const wfsUrl = 'https://mlinfomap.net/geoserver/AKB/ows';
-    const typeName = 'AKB:Aaj_Ka_Bharat2';
+    const wfsUrl = 'http://localhost:8080/geoserver/AKB/ows';
+    const typeName = 'AKB:India_District';
     const maxFeatures = 1000;
     const username = 'admin';
-    const password = 'Intel@1968';
+    const password = 'geoserver';
     pincodeLayerVector = pincodeLayerVector = addWfsVectorLayer(wfsUrl, typeName, maxFeatures, username, password);
 }
 addWfsVectorLayerFilter = (wfsUrl, typeName, maxFeatures, username, password) => {
@@ -97,7 +120,6 @@ addWfsVectorLayerFilter = (wfsUrl, typeName, maxFeatures, username, password) =>
         return dataSourceVect;
     });
 };
-
 tableshow = (data) => {
     $('#example-table').css('display', 'block');
     table = new Tabulator("#example-table", {
@@ -117,7 +139,7 @@ viewer.camera.flyTo({
 updateCqlFilterAndImageryLayer = (column, value, logicalOperator, _extent) => {
     let cqlFilter = buildCqlFilterImageLayer(column, value, logicalOperator, _extent);
     viewer.imageryLayers.remove(PincodeLayer);
-    PincodeLayer = addImageryLayer("https://mlinfomap.net/geoserver/AKB/wms", "AKB:PINCODE", cqlFilter);
+    PincodeLayer = addImageryLayer("http://localhost:8080/geoserver/AKB/wms", "PINCODE_CITY_NAME", cqlFilter);
 }
 filterVectorDataByExtent = (dataSource, extent) => {
     const _dataSource = new Cesium.CustomDataSource('myData');
@@ -145,11 +167,11 @@ filterVectorDataByExtent = (dataSource, extent) => {
 filterVectorLayer = () => {
     if (pincodeLayerVector) {
         viewer.dataSources.removeAll();
-        const wfsUrl = 'https://mlinfomap.net/geoserver/AKB/ows';
-        const typeName = 'AKB:Aaj_Ka_Bharat2';
+        const wfsUrl = 'http://localhost:8080/geoserver/AKB/ows';
+        const typeName = 'AKB:India_District';
         const maxFeatures = 1000;
         const username = 'admin';
-        const password = 'Intel@1968';
+        const password = 'geoserver';
         addWfsVectorLayerFilter(wfsUrl, typeName, maxFeatures, username, password)
     } else {
         alert('No vector Layer on Map!!');
@@ -176,9 +198,11 @@ filterDataClick = () => {
 }
 ResetFilter = () => {
     viewer.dataSources.removeAll();
-    $('#example-table').css('display', 'none');
+    dataSourceVect = null;
+    viewer.dataSources.remove(dataSourceVect);
     viewer.imageryLayers.remove(PincodeLayer);
-
+    PincodeLayer = null;
+    $('#example-table').css('display', 'none');
 }
 cartesianToLatlng = (cartesian) => {
     var latlng = viewer.scene.globe.ellipsoid.cartesianToCartographic(cartesian);
@@ -189,7 +213,6 @@ cartesianToLatlng = (cartesian) => {
 }
 StartDrawing = () => {
     $('#button_Tool').css('background-color', 'green');
-
     if (PincodeLayer || dataSourceVect) {
         enableDraw = true;
         $('#button_Tool').html('Tool Enabled');
@@ -198,7 +221,6 @@ StartDrawing = () => {
         alert('No layer on the map to filter!!');
         enableDraw = false;
         $('#button_Tool').css('background-color', '#071952');
-
     }
     //enableDraw = false;
 }
@@ -216,6 +238,22 @@ enableMapMovement = () => {
     viewer.scene.screenSpaceCameraController.enableTilt = true;
     viewer.scene.screenSpaceCameraController.enableLook = true;
 }
+collapseSidePanel = () => {
+    $('.expandButton').css('display', 'flex');
+    $('.collapseButton').css('display', 'none');
+    $('#SidePanel').css('display', 'none');
+    $('#SidePanel').addClass('col-lg-1 col-md-5 col-sm-6 p-0');
+    $('#map1').removeClass('col-lg-10 col-md-7 col-sm-6 p-0');
+    $('#map1').addClass('col-lg-12 col-md-7 col-sm-6 p-0');
+}
+expandSidePanel = () => {
+    $('#SidePanel').css('display', 'block');
+    $('.collapseButton').css('display', 'flex');
+    $('.expandButton').css('display', 'none');
+    $('#map1').removeClass('col-lg-12 col-md-7 col-sm-6 p-0');
+    $('#SidePanel').addClass('col-lg-2 col-md-5 col-sm-6 p-0');
+    $('#map1').addClass('col-lg-10 col-md-7 col-sm-6 p-0');
+}
 handler.setInputAction(function (click) {
     if (enableDraw) {
         startPosition = new Cesium.Cartesian2(click.position.x, click.position.y);
@@ -231,7 +269,6 @@ handler.setInputAction(function (movement) {
             var left = Math.min(startPosition.x, endPosition.x);
             var width = Math.abs(startPosition.x - endPosition.x);
             var height = Math.abs(startPosition.y - endPosition.y);
-
             selectionRectangle.style.top = top + 'px';
             selectionRectangle.style.left = left + 'px';
             selectionRectangle.style.width = width + 'px';
@@ -246,13 +283,11 @@ handler.setInputAction(function () {
         selectionRectangle.style.display = 'none';
         var startWorld = cartesianToLatlng(viewer.camera.pickEllipsoid(new Cesium.Cartesian2(startPosition.x, startPosition.y), viewer.scene.globe.ellipsoid));
         var endWorld = cartesianToLatlng(viewer.camera.pickEllipsoid(new Cesium.Cartesian2(endPosition.x, endPosition.y), viewer.scene.globe.ellipsoid));
-
         if (startWorld && endWorld) {
             var west = (Math.min(startWorld[0], endWorld[0])); //min x
             var east = (Math.max(startWorld[0], endWorld[0])); //max x
             var south = (Math.min(startWorld[1], endWorld[1])); // min y
             var north = (Math.max(startWorld[1], endWorld[1])); //max y
-
             _extent = [west, south, east, north];
         }
         let CQL_FILTER = "BBOX(the_geom, " + _extent.join(',') + ")"
@@ -274,8 +309,3 @@ handler.setInputAction(function () {
         }
     }
 }, Cesium.ScreenSpaceEventType.LEFT_UP);
-
-
-
-
-
